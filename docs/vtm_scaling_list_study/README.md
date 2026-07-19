@@ -5,6 +5,17 @@ It uses only `baboon`, `goldhill`, and `peppers` in the standard grayscale and s
 
 The main goal is to inspect the behavior of the partitioning scheme as QP changes when the VTM default scaling-list mechanism is explicitly enabled.
 
+Metric provenance:
+
+| Metric | Implementation | Evidence / source |
+| --- | --- | --- |
+| PSNR-RGB | local implementation, externally cross-checked | [Duan et al. validation report](../vtm_validation/lossy-vae/README.md) |
+| MS-SSIM-RGB | local implementation, protocol/RD cross-checked | [CompressAI validation report](../vtm_validation/compressai/README.md) |
+| PSNR-HVS-M luma | NumPy/SciPy port of authors' MATLAB implementation | [author page and MATLAB source](https://www.ponomarenko.info/psnrhvsm.htm); [audit copy and port notes](../../third_party/psnr_hvs_m/SOURCE.md) |
+| HaarPSI luma | authors' Python/NumPy implementation | [authors' project and implementation](https://www.math.uni-bremen.de/cda/HaarPSI/); [audit copy](../../third_party/haarpsi/SOURCE.md) |
+| PSNR-Y | codec log | [VTM EncoderApp source](https://github.com/ooplisko/VVCSoftware_VTM_CSF/blob/feature/csf-scaling-list/source/Lib/EncoderLib/EncGOP.cpp) |
+| MS-SSIM luma | Wang et al. algorithm | [Wang-Simoncelli-Bovik paper](https://ece.uwaterloo.ca/~z70wang/publications/msssim.pdf); [numerical regression tests](../../tests/test_image_quality.py) |
+
 ## Reproduce
 
 ```powershell
@@ -18,19 +29,26 @@ The runner writes long intermediate codec output under `results/vtm_scaling_list
 
 Metrics CSV: [`standard_grayscale/image_metrics.csv`](standard_grayscale/image_metrics.csv)
 Partition CSV: [`partition_overlays/standard_grayscale/summary.csv`](partition_overlays/standard_grayscale/summary.csv)
+Scaling-list mode comparison CSV: [`standard_grayscale/scaling_list_mode_comparison.csv`](standard_grayscale/scaling_list_mode_comparison.csv)
 
 ### Baboon
 
 Mode: VTM 23.0 `--ScalingList=1`.
 
+In the metric table, `Bitstream bytes (.vvc file size)` is the actual size of the encoded VVC bitstream file written by the encoder.
+
+For this table, luma means the first Y plane of the planar YUV 4:4:4 input/reconstruction. The OpenCV path converts RGB to YUV in [`ImageConverter.to_yuv444p_opencv()`](../../vvenc_csf/encoding.py), and local luma metrics read the Y plane in [`metrics.image_quality.read_luma()`](../../metrics/image_quality.py).
+
 Metric values by QP:
 
-| QP | BPP | Bitstream bytes | PSNR-Y | MS-SSIM luma | PSNR-HVS-M luma | HaarPSI luma |
+| QP | BPP | Bitstream bytes (.vvc file size) | PSNR-Y | MS-SSIM luma | PSNR-HVS-M luma | HaarPSI luma |
 | --- | --- | --- | --- | --- | --- | --- |
 | 22 | 2.8338 | 92859 | 41.803 | 0.998562 | 49.614 | 0.988930 |
 | 27 | 1.9699 | 64550 | 36.871 | 0.995215 | 44.499 | 0.966943 |
 | 32 | 1.1966 | 39211 | 32.273 | 0.985897 | 37.698 | 0.908470 |
 | 37 | 0.6306 | 20663 | 28.336 | 0.966285 | 31.438 | 0.800921 |
+
+VVC QT/MTT partitioning produces CU blocks with different shapes, including rectangular blocks such as `8x4`, `4x8`, `16x8`, and `8x16`. The partition tables report block dimensions as `width x height`.
 
 CU partition statistics by QP:
 
@@ -59,14 +77,20 @@ CU partition-map overlays:
 
 Mode: VTM 23.0 `--ScalingList=1`.
 
+In the metric table, `Bitstream bytes (.vvc file size)` is the actual size of the encoded VVC bitstream file written by the encoder.
+
+For this table, luma means the first Y plane of the planar YUV 4:4:4 input/reconstruction. The OpenCV path converts RGB to YUV in [`ImageConverter.to_yuv444p_opencv()`](../../vvenc_csf/encoding.py), and local luma metrics read the Y plane in [`metrics.image_quality.read_luma()`](../../metrics/image_quality.py).
+
 Metric values by QP:
 
-| QP | BPP | Bitstream bytes | PSNR-Y | MS-SSIM luma | PSNR-HVS-M luma | HaarPSI luma |
+| QP | BPP | Bitstream bytes (.vvc file size) | PSNR-Y | MS-SSIM luma | PSNR-HVS-M luma | HaarPSI luma |
 | --- | --- | --- | --- | --- | --- | --- |
 | 22 | 1.5258 | 49997 | 41.764 | 0.997357 | 48.183 | 0.984193 |
 | 27 | 0.8197 | 26860 | 37.454 | 0.992517 | 42.538 | 0.956405 |
 | 32 | 0.4011 | 13142 | 34.113 | 0.981572 | 36.344 | 0.895574 |
 | 37 | 0.1859 | 6092 | 31.349 | 0.960468 | 30.994 | 0.791549 |
+
+VVC QT/MTT partitioning produces CU blocks with different shapes, including rectangular blocks such as `8x4`, `4x8`, `16x8`, and `8x16`. The partition tables report block dimensions as `width x height`.
 
 CU partition statistics by QP:
 
@@ -95,14 +119,20 @@ CU partition-map overlays:
 
 Mode: VTM 23.0 `--ScalingList=1`.
 
+In the metric table, `Bitstream bytes (.vvc file size)` is the actual size of the encoded VVC bitstream file written by the encoder.
+
+For this table, luma means the first Y plane of the planar YUV 4:4:4 input/reconstruction. The OpenCV path converts RGB to YUV in [`ImageConverter.to_yuv444p_opencv()`](../../vvenc_csf/encoding.py), and local luma metrics read the Y plane in [`metrics.image_quality.read_luma()`](../../metrics/image_quality.py).
+
 Metric values by QP:
 
-| QP | BPP | Bitstream bytes | PSNR-Y | MS-SSIM luma | PSNR-HVS-M luma | HaarPSI luma |
+| QP | BPP | Bitstream bytes (.vvc file size) | PSNR-Y | MS-SSIM luma | PSNR-HVS-M luma | HaarPSI luma |
 | --- | --- | --- | --- | --- | --- | --- |
 | 22 | 1.1861 | 38866 | 41.284 | 0.995533 | 46.024 | 0.984003 |
 | 27 | 0.4579 | 15005 | 37.029 | 0.988201 | 40.551 | 0.955788 |
 | 32 | 0.2021 | 6623 | 34.881 | 0.980428 | 36.500 | 0.912144 |
 | 37 | 0.1165 | 3816 | 33.239 | 0.972002 | 33.010 | 0.856761 |
+
+VVC QT/MTT partitioning produces CU blocks with different shapes, including rectangular blocks such as `8x4`, `4x8`, `16x8`, and `8x16`. The partition tables report block dimensions as `width x height`.
 
 CU partition statistics by QP:
 
@@ -131,19 +161,26 @@ CU partition-map overlays:
 
 Metrics CSV: [`standard_color/image_metrics.csv`](standard_color/image_metrics.csv)
 Partition CSV: [`partition_overlays/standard_color/summary.csv`](partition_overlays/standard_color/summary.csv)
+Scaling-list mode comparison CSV: [`standard_color/scaling_list_mode_comparison.csv`](standard_color/scaling_list_mode_comparison.csv)
 
 ### Baboon
 
 Mode: VTM 23.0 `--ScalingList=1`.
 
+In the metric table, `Bitstream bytes (.vvc file size)` is the actual size of the encoded VVC bitstream file written by the encoder.
+
+For this table, luma means the first Y plane of the planar YUV 4:4:4 input/reconstruction. The OpenCV path converts RGB to YUV in [`ImageConverter.to_yuv444p_opencv()`](../../vvenc_csf/encoding.py), and local luma metrics read the Y plane in [`metrics.image_quality.read_luma()`](../../metrics/image_quality.py).
+
 Metric values by QP:
 
-| QP | BPP | Bitstream bytes | PSNR-RGB | MS-SSIM-RGB | PSNR-HVS-M luma | HaarPSI luma |
+| QP | BPP | Bitstream bytes (.vvc file size) | PSNR-RGB | MS-SSIM-RGB | PSNR-HVS-M luma | HaarPSI luma |
 | --- | --- | --- | --- | --- | --- | --- |
 | 22 | 6.5756 | 197269 | 36.657 | 0.996363 | 50.035 | 0.987677 |
 | 27 | 4.0788 | 122365 | 31.772 | 0.988790 | 44.066 | 0.963182 |
 | 32 | 1.7875 | 53625 | 27.430 | 0.969449 | 36.925 | 0.896491 |
 | 37 | 0.7008 | 21025 | 24.607 | 0.939732 | 30.673 | 0.778727 |
+
+VVC QT/MTT partitioning produces CU blocks with different shapes, including rectangular blocks such as `8x4`, `4x8`, `16x8`, and `8x16`. The partition tables report block dimensions as `width x height`.
 
 CU partition statistics by QP:
 
@@ -172,14 +209,20 @@ CU partition-map overlays:
 
 Mode: VTM 23.0 `--ScalingList=1`.
 
+In the metric table, `Bitstream bytes (.vvc file size)` is the actual size of the encoded VVC bitstream file written by the encoder.
+
+For this table, luma means the first Y plane of the planar YUV 4:4:4 input/reconstruction. The OpenCV path converts RGB to YUV in [`ImageConverter.to_yuv444p_opencv()`](../../vvenc_csf/encoding.py), and local luma metrics read the Y plane in [`metrics.image_quality.read_luma()`](../../metrics/image_quality.py).
+
 Metric values by QP:
 
-| QP | BPP | Bitstream bytes | PSNR-RGB | MS-SSIM-RGB | PSNR-HVS-M luma | HaarPSI luma |
+| QP | BPP | Bitstream bytes (.vvc file size) | PSNR-RGB | MS-SSIM-RGB | PSNR-HVS-M luma | HaarPSI luma |
 | --- | --- | --- | --- | --- | --- | --- |
 | 22 | 2.1323 | 110540 | 38.038 | 0.991907 | 47.814 | 0.985198 |
 | 27 | 0.7558 | 39182 | 33.976 | 0.978994 | 40.369 | 0.944464 |
 | 32 | 0.3315 | 17184 | 31.652 | 0.961985 | 34.522 | 0.868915 |
 | 37 | 0.1492 | 7737 | 29.531 | 0.932319 | 29.817 | 0.756322 |
+
+VVC QT/MTT partitioning produces CU blocks with different shapes, including rectangular blocks such as `8x4`, `4x8`, `16x8`, and `8x16`. The partition tables report block dimensions as `width x height`.
 
 CU partition statistics by QP:
 
@@ -208,14 +251,20 @@ CU partition-map overlays:
 
 Mode: VTM 23.0 `--ScalingList=1`.
 
+In the metric table, `Bitstream bytes (.vvc file size)` is the actual size of the encoded VVC bitstream file written by the encoder.
+
+For this table, luma means the first Y plane of the planar YUV 4:4:4 input/reconstruction. The OpenCV path converts RGB to YUV in [`ImageConverter.to_yuv444p_opencv()`](../../vvenc_csf/encoding.py), and local luma metrics read the Y plane in [`metrics.image_quality.read_luma()`](../../metrics/image_quality.py).
+
 Metric values by QP:
 
-| QP | BPP | Bitstream bytes | PSNR-RGB | MS-SSIM-RGB | PSNR-HVS-M luma | HaarPSI luma |
+| QP | BPP | Bitstream bytes (.vvc file size) | PSNR-RGB | MS-SSIM-RGB | PSNR-HVS-M luma | HaarPSI luma |
 | --- | --- | --- | --- | --- | --- | --- |
 | 22 | 2.3496 | 76993 | 36.784 | 0.989270 | 46.006 | 0.983649 |
 | 27 | 0.8065 | 26426 | 33.552 | 0.977936 | 40.584 | 0.955072 |
 | 32 | 0.3372 | 11049 | 31.869 | 0.966664 | 36.580 | 0.914669 |
 | 37 | 0.1855 | 6078 | 30.468 | 0.953458 | 33.064 | 0.857913 |
+
+VVC QT/MTT partitioning produces CU blocks with different shapes, including rectangular blocks such as `8x4`, `4x8`, `16x8`, and `8x16`. The partition tables report block dimensions as `width x height`.
 
 CU partition statistics by QP:
 
@@ -239,3 +288,30 @@ CU partition-map overlays:
 | --- | --- |
 | **QP 22**<br><img src="partition_overlays/standard_color/QP22/peppers_scalinglist_default.png" width="300"> | **QP 27**<br><img src="partition_overlays/standard_color/QP27/peppers_scalinglist_default.png" width="300"> |
 | **QP 32**<br><img src="partition_overlays/standard_color/QP32/peppers_scalinglist_default.png" width="300"> | **QP 37**<br><img src="partition_overlays/standard_color/QP37/peppers_scalinglist_default.png" width="300"> |
+
+## Scaling-List Mode Comparison
+
+This control is generated by [`tools/research/run_vtm_scaling_list_study.py`](../../tools/research/run_vtm_scaling_list_study.py), which runs paired VTM encodes with `--ScalingList=0` and `--ScalingList=1` for the same source image, YUV conversion path, encoder binary, configuration file, and QP.
+`--ScalingList=0` is VTM's off path. In that path no explicit scaling-list APS is signaled and quantization uses the flat/no-scaling-list path.
+`--ScalingList=1` enables VTM default scaling lists.
+
+Every delta is calculated as paired `--ScalingList=1` minus paired `--ScalingList=0`. Full per-metric values and deltas are stored in the linked CSV files.
+
+### Standard Grayscale
+
+CSV: [`standard_grayscale/scaling_list_mode_comparison.csv`](standard_grayscale/scaling_list_mode_comparison.csv)
+
+All listed deltas are zero for this dataset.
+The full per-QP comparison remains in the CSV; the README table is omitted because it would only repeat zeros.
+
+### Standard Color
+
+CSV: [`standard_color/scaling_list_mode_comparison.csv`](standard_color/scaling_list_mode_comparison.csv)
+
+Quality-metric deltas are zero for every paired encode in this dataset. The only non-zero values are 1-byte bitstream-size differences at the rows listed below.
+These differences are attributed to scaling-list mode signaling/syntax: `--ScalingList=1` may write different bitstream syntax while the decoded reconstruction and all measured quality metrics remain identical.
+
+| Image | QP | BPP delta, % | Bitstream-byte delta | PSNR-RGB delta | MS-SSIM-RGB delta | PSNR-HVS-M luma delta | HaarPSI luma delta |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| baboon | 37 | 0.0048 | 1 | 0.000000 | 0.000000 | 0.000000 | 0.000000 |
+| goldhill | 37 | 0.0129 | 1 | 0.000000 | 0.000000 | 0.000000 | 0.000000 |

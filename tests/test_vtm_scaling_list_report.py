@@ -75,6 +75,11 @@ def test_scaling_list_readme_is_separate_study(tmp_path: Path) -> None:
     assert "CU partition statistics by QP" in readme
     assert "<details>" not in readme
     assert "behavior of the partitioning scheme as QP changes" in readme
+    assert "rectangular blocks" in readme
+    assert "Bitstream bytes (.vvc file size)" in readme
+    assert "luma means the first Y plane" in readme
+    assert "Metric provenance" in readme
+    assert "ScalingList=0/off" in readme
     assert "CU color" not in readme
     assert "VTM 23.0 baseline and VTM 23.0 CSF" not in readme
 
