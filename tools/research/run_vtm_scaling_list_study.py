@@ -21,6 +21,10 @@ DEFAULT_DECODER = platform_executable(Path("binaries/vtm/vtm23/baseline/DecoderA
 DEFAULT_TRACE_ENCODER = platform_executable(Path("binaries/vtm/vtm23/baseline_trace/EncoderApp"))
 DEFAULT_IMAGES = ("baboon", "goldhill", "peppers")
 OVERLAY_CU_COLOR_BGR = (255, 87, 0)  # RGB #0057FF
+SCALING_LIST_COMPARISON_MODES = (
+    ("scalinglist_off", ("--ScalingList=0",)),
+    ("scalinglist_default", ("--ScalingList=1",)),
+)
 
 
 def selected_images(directory: Path, names: tuple[str, ...]) -> list[Path]:
@@ -114,6 +118,110 @@ def run_metrics(args: argparse.Namespace, dataset: str, images: list[Path]) -> N
             )
 
     write_csv(args.results / dataset / "image_metrics.csv", rows)
+
+
+def run_scaling_list_comparison(args: argparse.Namespace, dataset: str, images: list[Path]) -> None:
+    """Run paired VTM ScalingList=0 and ScalingList=1 encodes under identical inputs."""
+
+    runner = CommandRunner()
+    converter = ImageConverter(runner)
+    encoder = EncoderRunner(runner)
+    decoder = DecoderRunner(args.decoder, runner)
+    metrics = VisualMetricCalculator(runner)
+    parser = EncoderLogParser()
+    metric_rows: list[dict[str, object]] = []
+
+    for image in images:
+        width, height = ffprobe_size(image, runner)
+        yuv = args.results / "scaling_list_comparison" / dataset / "yuv" / f"{image.stem}_{width}x{height}_1.yuv"
+        if args.conversion == "opencv_444":
+            converter.to_yuv444p_opencv(image, yuv)
+        else:
+            converter.to_yuv444p(image, yuv)
+        raw_bytes = width * height * 3
+
+        for qp in parse_qps(args.qps):
+            for mode, extra_args in SCALING_LIST_COMPARISON_MODES:
+                out_dir = args.results / "scaling_list_comparison" / dataset / "encoded" / image.stem / f"QP{qp}" / mode
+                bitstream = out_dir / f"{image.stem}_QP{qp}_{mode}.vvc"
+                recon = out_dir / f"{image.stem}_QP{qp}_{mode}_rec.yuv"
+                decoded = out_dir / f"{image.stem}_QP{qp}_{mode}_dec.yuv"
+                encode_log = out_dir / f"{image.stem}_QP{qp}_{mode}_enc.log"
+                if args.reuse_comparison_encodes and bitstream.exists() and recon.exists() and encode_log.exists():
+                    text = encode_log.read_text(encoding="utf-8", errors="replace")
+                else:
+                    text = encoder.encode(
+                        EncodeJob(
+                            encoder=args.encoder,
+                            yuv=yuv,
+                            width=width,
+                            height=height,
+                            qp=qp,
+                            preset=args.preset,
+                            bitstream=bitstream,
+                            recon=recon,
+                            log=encode_log,
+                            extra_args=extra_args,
+                            codec="vtm",
+                        )
+                    )
+                if not (args.reuse_comparison_encodes and decoded.exists()):
+                    decoder.decode(bitstream, decoded, out_dir / f"{image.stem}_QP{qp}_{mode}_dec.log")
+                if not files_equal(recon, decoded):
+                    raise RuntimeError(f"Decoded YUV differs from encoder reconstruction: {decoded}")
+                bytes_out = bitstream.stat().st_size
+                metric_rows.append(
+                    {
+                        "dataset": dataset,
+                        "image": image.stem,
+                        "width": width,
+                        "height": height,
+                        "qp": qp,
+                        "mode": mode,
+                        "scaling_list": "0" if mode == "scalinglist_off" else "1",
+                        "bitstream_bytes": bytes_out,
+                        "compression_ratio": raw_bytes / bytes_out if bytes_out else 0,
+                        "bpp": (bytes_out * 8) / (width * height),
+                        **parser.parse(text),
+                        **metrics.calculate(yuv, recon, width, height, chroma_format="444"),
+                    }
+                )
+
+    comparison_dir = args.results / "scaling_list_comparison" / dataset
+    write_csv(comparison_dir / "scaling_list_mode_metrics.csv", metric_rows)
+    write_csv(comparison_dir / "scaling_list_mode_comparison.csv", scaling_list_comparison_rows(metric_rows))
+
+
+def scaling_list_comparison_rows(rows: list[dict[str, object]]) -> list[dict[str, object]]:
+    by_key: dict[tuple[str, int], dict[str, dict[str, object]]] = {}
+    metrics = ("bpp", "bitstream_bytes", "psnr_y", "psnr_rgb", "msssim_luma", "msssim_rgb", "psnr_hvs_m_luma", "haarpsi_luma")
+    for row in rows:
+        by_key.setdefault((str(row["image"]), int(row["qp"])), {})[str(row["mode"])] = row
+
+    output: list[dict[str, object]] = []
+    for (image, qp), modes in sorted(by_key.items()):
+        sl0 = modes.get("scalinglist_off")
+        sl1 = modes.get("scalinglist_default")
+        if sl0 is None or sl1 is None:
+            continue
+        item: dict[str, object] = {
+            "image": image,
+            "qp": qp,
+            "scaling_list_0_mode": "paired --ScalingList=0",
+            "scaling_list_1_mode": "paired --ScalingList=1",
+        }
+        for metric in metrics:
+            if metric not in sl0 or metric not in sl1:
+                continue
+            sl0_value = float(sl0[metric])
+            sl1_value = float(sl1[metric])
+            item[f"{metric}_sl0"] = sl0_value
+            item[f"{metric}_sl1"] = sl1_value
+            item[f"{metric}_delta"] = sl1_value - sl0_value
+            if metric in {"bpp", "bitstream_bytes"}:
+                item[f"{metric}_delta_pct"] = _pct(sl1_value, sl0_value)
+        output.append(item)
+    return output
 
 
 def build_partition_overlays(args: argparse.Namespace, dataset: str, images: list[Path]) -> None:
@@ -220,6 +328,12 @@ def write_partition_summary(output: Path, rows: list[dict[str, object]]) -> None
         writer.writerows(rows)
 
 
+def _pct(new_value: float, base_value: float) -> float:
+    if base_value == 0:
+        return 0.0
+    return ((new_value - base_value) / base_value) * 100.0
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run VTM --ScalingList=1 QP study for baboon, goldhill, and peppers.")
     parser.add_argument("--results", type=Path, default=Path("results/vtm_scaling_list_study"))
@@ -236,6 +350,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--trace-encoder", type=Path, default=DEFAULT_TRACE_ENCODER)
     parser.add_argument("--skip-metrics", action="store_true")
     parser.add_argument("--skip-partitions", action="store_true")
+    parser.add_argument("--skip-comparison", action="store_true")
+    parser.add_argument("--comparison-only", action="store_true")
+    parser.add_argument("--reuse-comparison-encodes", action="store_true", help="Reuse existing paired ScalingList=0/1 bitstreams and reconstructions.")
     parser.add_argument("--reuse-partition-csv", action="store_true", help="Re-render partition overlays from existing trace CSV files when available.")
     parser.add_argument("--clean", action="store_true")
     return parser.parse_args()
@@ -257,10 +374,12 @@ def main() -> int:
     ]
     for dataset, png_dir in datasets:
         images = selected_images(png_dir, names)
-        if not args.skip_metrics:
+        if not args.comparison_only and not args.skip_metrics:
             run_metrics(args, dataset, images)
-        if not args.skip_partitions:
+        if not args.comparison_only and not args.skip_partitions:
             build_partition_overlays(args, dataset, images)
+        if not args.skip_comparison:
+            run_scaling_list_comparison(args, dataset, images)
 
     old_argv = sys.argv
     try:
