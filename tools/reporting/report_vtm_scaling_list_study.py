@@ -91,25 +91,57 @@ def render_qp_charts(rows: list[dict[str, str]], output_dir: Path, metrics: tupl
 def build_readme(output: Path, datasets: tuple[tuple[str, str, tuple[str, ...]], ...] = DATASETS, partition_qp: int | None = None) -> str:
     _ = partition_qp
     lines = [
-        "# VTM Scaling List Study",
+        "# VTM 23.0 Default Scaling-List QP Study",
         "",
-        "This study isolates the built-in VTM 23.0 default scaling-list mode: `--ScalingList=1`.",
-        "It uses only `baboon`, `goldhill`, and `peppers` in the standard grayscale and standard color datasets.",
+        "This study examines how QP affects compression, reconstructed-image quality, and CU partitioning in the unmodified VTM 23.0 baseline encoder with its stock default scaling-list mode (`--ScalingList=1`). The evaluated images are `baboon`, `goldhill`, and `peppers`, each in standard grayscale and standard color form.",
         "",
-        "The main goal is to inspect the behavior of the partitioning scheme as QP changes when the VTM default scaling-list mechanism is explicitly enabled.",
+        "No custom or CSF matrix is used in the primary experiment. A paired `--ScalingList=0`/`--ScalingList=1` control is reported separately at the end.",
         "",
-        "Metric provenance:",
+        "## Key Findings",
+        "",
+        "- Across all six image variants, increasing QP from 22 to 37 reduces BPP and every reported quality metric.",
+        "- CU count decreases and mean CU area increases with QP for every image; the encoder therefore represents each frame with fewer, larger coding units at higher QP.",
+        "- The stock `--ScalingList=1` mode and the flat `--ScalingList=0` control produce identical reconstructions and quality metrics. Their differences are confined to scaling-list mode syntax and, in two cases, one byte of alignment overhead.",
+        "",
+        "## Experimental Protocol",
+        "",
+        *_markdown_table(
+            ["Item", "Setting"],
+            [
+                ["Encoder", "VTM 23.0 baseline `binaries/vtm/vtm23/baseline/EncoderApp`"],
+                ["Configuration", "Single-frame all-intra coding with [`configs/vtm_encoder_intra.cfg`](../../configs/vtm_encoder_intra.cfg)"],
+                ["Input", "OpenCV conversion to planar YUV 4:4:4, 8-bit input, 10-bit internal processing"],
+                ["QP points", "22, 27, 32, 37"],
+                ["Primary mode", "`--ScalingList=1` (stock VTM default scaling list)"],
+                ["Datasets", "Standard grayscale and standard color; `baboon`, `goldhill`, `peppers`"],
+                ["Consistency check", "Baseline DecoderApp output must be byte-identical to the encoder reconstruction"],
+            ],
+        ),
+        "",
+        "Partition traces are generated with the trace-enabled build of the same baseline encoder and the same coding configuration.",
+        "",
+        "## Measurements and Provenance",
+        "",
+        "`Bitstream bytes (.vvc file size)` is the exact encoded `.vvc` file size. For these single-image encodes, `BPP = 8 * bitstream bytes / (width * height)`.",
+        "",
+        "Luma denotes the first Y plane of the planar YUV 4:4:4 input or reconstruction. The OpenCV conversion is implemented in [`ImageConverter.to_yuv444p_opencv()`](../../vvenc_csf/encoding.py), and local luma metrics read Y through [`metrics.image_quality.read_luma()`](../../metrics/image_quality.py).",
+        "",
+        "VVC QT/MTT partitioning produces square and rectangular CUs. Dimensions such as `8x4`, `4x8`, `16x8`, and `8x16` are reported as `width x height`; CU area is `width * height`.",
+        "",
+        "Metric implementations and validation sources:",
         "",
         *_metric_provenance_table(),
         "",
-        "## Reproduce",
+        "## Reproduction",
         "",
         "```powershell",
         "python tools\\research\\run_vtm_scaling_list_study.py --clean",
         "python tools\\reporting\\report_vtm_scaling_list_study.py",
         "```",
         "",
-        "The runner writes long intermediate codec output under `results/vtm_scaling_list_study/`. This README and compact artifacts are stored under `docs/vtm_scaling_list_study/`.",
+        "Intermediate bitstreams, reconstructions, traces, and logs are written to `results/vtm_scaling_list_study/`. Compact CSV files, charts, overlays, and this report are written to `docs/vtm_scaling_list_study/`.",
+        "",
+        "## Per-Image Results",
         "",
     ]
 
@@ -119,16 +151,14 @@ def build_readme(output: Path, datasets: tuple[tuple[str, str, tuple[str, ...]],
         metric_rows = read_rows(metrics_csv) if metrics_csv.exists() else []
         metric_groups = _rows_by_image(metric_rows)
         partition_groups = _partition_rows_by_image(output / "partition_overlays" / dataset / "summary.csv")
-        lines.extend([f"## {title}", ""])
+        lines.extend([f"### {title}", ""])
         if not metric_rows:
             lines.extend(["Metrics are not generated yet.", ""])
             continue
 
         lines.extend(
             [
-                f"Metrics CSV: [`{dataset}/image_metrics.csv`]({dataset}/image_metrics.csv)",
-                f"Partition CSV: [`partition_overlays/{dataset}/summary.csv`](partition_overlays/{dataset}/summary.csv)",
-                f"Scaling-list mode comparison CSV: [`{dataset}/scaling_list_mode_comparison.csv`]({dataset}/scaling_list_mode_comparison.csv)",
+                f"Artifacts: [metrics CSV]({dataset}/image_metrics.csv), [partition statistics CSV](partition_overlays/{dataset}/summary.csv), and [mode-comparison CSV]({dataset}/scaling_list_mode_comparison.csv).",
                 "",
             ]
         )
@@ -142,15 +172,9 @@ def build_readme(output: Path, datasets: tuple[tuple[str, str, tuple[str, ...]],
             ]
             lines.extend(
                 [
-                    f"### {image.title()}",
+                    f"#### {image.title()}",
                     "",
-                    "Mode: VTM 23.0 `--ScalingList=1`.",
-                    "",
-                    "In the metric table, `Bitstream bytes (.vvc file size)` is the actual size of the encoded VVC bitstream file written by the encoder.",
-                    "",
-                    "For this table, luma means the first Y plane of the planar YUV 4:4:4 input/reconstruction. The OpenCV path converts RGB to YUV in [`ImageConverter.to_yuv444p_opencv()`](../../vvenc_csf/encoding.py), and local luma metrics read the Y plane in [`metrics.image_quality.read_luma()`](../../metrics/image_quality.py).",
-                    "",
-                    "Metric values by QP:",
+                    "Metric values by QP",
                     "",
                     *_markdown_table(
                         ["QP", "BPP", "Bitstream bytes (.vvc file size)", *[METRIC_LABELS.get(metric, metric) for metric in metrics]],
@@ -163,9 +187,7 @@ def build_readme(output: Path, datasets: tuple[tuple[str, str, tuple[str, ...]],
             if partition_rows:
                 lines.extend(
                     [
-                        "VVC QT/MTT partitioning produces CU blocks with different shapes, including rectangular blocks such as `8x4`, `4x8`, `16x8`, and `8x16`. The partition tables report block dimensions as `width x height`.",
-                        "",
-                        "CU partition statistics by QP:",
+                        "CU partition statistics by QP",
                         "",
                         *_markdown_table(
                             ["QP", "CU count", "Min area", "Max area", "Mean area", "Dominant CU sizes"],
@@ -177,11 +199,11 @@ def build_readme(output: Path, datasets: tuple[tuple[str, str, tuple[str, ...]],
 
             lines.extend(
                 [
-                    "QP metric curves:",
+                    "QP metric curves",
                     "",
                     *_markdown_table(["QP chart", "QP chart"], _pair_cells(chart_cells)),
                     "",
-                    "CU partition-map overlays:",
+                    "CU partition-map overlays",
                     "",
                     *_markdown_table(["Overlay", "Overlay"], _pair_cells(_overlay_cells(output, dataset, image))),
                     "",
@@ -279,20 +301,32 @@ def _scaling_list_comparison_section(output: Path, datasets: tuple[tuple[str, st
         return [
             "## Scaling-List Mode Comparison",
             "",
-            "The paired `--ScalingList=0` versus `--ScalingList=1` control has not been generated yet.",
-            "`--ScalingList=0` is reported as the VTM `ScalingList=0/off` path.",
-            "Run `python tools\\research\\run_vtm_scaling_list_study.py --comparison-only --reuse-comparison-encodes` and then re-render this report.",
+            "Paired `--ScalingList=0`/`--ScalingList=1` control results are not available. Generate them with `python tools\\research\\run_vtm_scaling_list_study.py --comparison-only --reuse-comparison-encodes`, then run the reporting script.",
             "",
         ]
 
     lines = [
         "## Scaling-List Mode Comparison",
         "",
-        "This control is generated by [`tools/research/run_vtm_scaling_list_study.py`](../../tools/research/run_vtm_scaling_list_study.py), which runs paired VTM encodes with `--ScalingList=0` and `--ScalingList=1` for the same source image, YUV conversion path, encoder binary, configuration file, and QP.",
-        "`--ScalingList=0` is VTM's off path. In that path no explicit scaling-list APS is signaled and quantization uses the flat/no-scaling-list path.",
-        "`--ScalingList=1` enables VTM default scaling lists.",
+        "The control runner performs paired encodes with the same source, conversion path, baseline VTM binary, configuration, and QP. Quantization remains active in both modes:",
         "",
-        "Every delta is calculated as paired `--ScalingList=1` minus paired `--ScalingList=0`. Full per-metric values and deltas are stored in the linked CSV files.",
+        *_markdown_table(
+            ["Mode", "VTM path", "Frequency weighting"],
+            [
+                ["`--ScalingList=0` (`off`)", "Flat/no-scaling-list", "Uniform; mathematically equivalent to neutral weights"],
+                ["`--ScalingList=1` (`default`)", "Stock default scaling list", "All coefficients are `16`"],
+            ],
+        ),
+        "",
+        "The VTM 23.0 [default matrices](https://github.com/ooplisko/VVCSoftware_VTM_CSF/blob/feature/csf-scaling-list/source/Lib/CommonLib/Rom.cpp#L566-L595) and [mode-initialization paths](https://github.com/ooplisko/VVCSoftware_VTM_CSF/blob/feature/csf-scaling-list/source/Lib/EncoderLib/EncLib.cpp#L541-L565) therefore yield the same effective quantization. No custom or CSF matrix is involved.",
+        "",
+        "For scaling coefficient `S(x,y)`, the simplified effective step is `Delta_eff(x,y) = Delta_QP * S(x,y) / 16`. Consequently, `S(x,y) = 16` gives `Delta_eff = Delta_QP`.",
+        "",
+        "All 24 paired encodes produced bit-identical reconstructed YUV files and identical quality metrics. Their VVC bitstreams are not bit-identical: `--ScalingList=1` changes the [SPS scaling-list flag](https://github.com/ooplisko/VVCSoftware_VTM_CSF/blob/feature/csf-scaling-list/source/Lib/EncoderLib/VLCWriter.cpp#L1190) and adds a [picture-header presence flag](https://github.com/ooplisko/VVCSoftware_VTM_CSF/blob/feature/csf-scaling-list/source/Lib/EncoderLib/VLCWriter.cpp#L1726-L1732); PPS, APS, and coded sample data remain unchanged.",
+        "",
+        "For color `baboon` and `goldhill` at QP 37, the additional flag crosses a byte boundary and produces one new `0x80` [slice-header alignment byte](https://github.com/ooplisko/VVCSoftware_VTM_CSF/blob/feature/csf-scaling-list/source/Lib/CommonLib/BitStream.cpp#L188-L192). This is deterministic syntax overhead, not a quantization or quality change.",
+        "",
+        "All deltas below are calculated as `ScalingList=1 - ScalingList=0`.",
         "",
     ]
     for dataset, title, metrics in datasets:
@@ -304,7 +338,7 @@ def _scaling_list_comparison_section(output: Path, datasets: tuple[tuple[str, st
             [
                 f"### {title}",
                 "",
-                f"CSV: [`{dataset}/scaling_list_mode_comparison.csv`]({dataset}/scaling_list_mode_comparison.csv)",
+                f"Full per-QP results: [`{dataset}/scaling_list_mode_comparison.csv`]({dataset}/scaling_list_mode_comparison.csv)",
                 "",
             ]
         )
@@ -313,15 +347,13 @@ def _scaling_list_comparison_section(output: Path, datasets: tuple[tuple[str, st
             lines.extend(
                 [
                     zero_note,
-                    "The full per-QP comparison remains in the CSV; the README table is omitted because it would only repeat zeros.",
                     "",
                 ]
             )
         elif _metrics_identical_with_bitstream_only_delta(rows, metrics):
             lines.extend(
                 [
-                    "Quality-metric deltas are zero for every paired encode in this dataset. The only non-zero values are 1-byte bitstream-size differences at the rows listed below.",
-                    "These differences are attributed to scaling-list mode signaling/syntax: `--ScalingList=1` may write different bitstream syntax while the decoded reconstruction and all measured quality metrics remain identical.",
+                    "All reconstruction and quality-metric deltas are zero. A file-size delta occurs only in the following streams.",
                     "",
                 ]
             )
@@ -335,7 +367,7 @@ def _zero_delta_note(rows: list[dict[str, str]], metrics: tuple[str, ...]) -> st
     fields = ["bpp_delta", "bitstream_bytes_delta", *[f"{metric}_delta" for metric in metrics if f"{metric}_delta" in rows[0]]]
     non_zero = [row for row in rows if any(abs(float(row[field])) > 1e-9 for field in fields)]
     if not non_zero:
-        return "All listed deltas are zero for this dataset."
+        return "All quality-metric and file-size deltas are zero; only the mode syntax differs."
     return ""
 
 
@@ -353,7 +385,20 @@ def _comparison_per_qp_table(rows: list[dict[str, str]], metrics: tuple[str, ...
 def _comparison_non_zero_table(rows: list[dict[str, str]], metrics: tuple[str, ...]) -> list[str]:
     fields = ["bpp_delta", "bitstream_bytes_delta", *[f"{metric}_delta" for metric in metrics if f"{metric}_delta" in rows[0]]]
     non_zero = [row for row in rows if any(abs(float(row[field])) > 1e-9 for field in fields)]
-    return _comparison_table(non_zero, metrics)
+    return _markdown_table(
+        ["Image", "QP", "ScalingList=0 bytes", "ScalingList=1 bytes", "Delta, bytes", "BPP delta, %"],
+        [
+            [
+                row["image"],
+                str(int(float(row["qp"]))),
+                _fmt(row["bitstream_bytes_sl0"], 0),
+                _fmt(row["bitstream_bytes_sl1"], 0),
+                _fmt(row["bitstream_bytes_delta"], 0),
+                _fmt(row["bpp_delta_pct"], 4),
+            ]
+            for row in sorted(non_zero, key=lambda item: (_image_order(item["image"]), int(item["qp"])))
+        ],
+    )
 
 
 def _comparison_table(rows: list[dict[str, str]], metrics: tuple[str, ...]) -> list[str]:

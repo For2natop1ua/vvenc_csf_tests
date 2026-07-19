@@ -67,21 +67,56 @@ def test_scaling_list_readme_is_separate_study(tmp_path: Path) -> None:
 
     readme = build_readme(tmp_path, (("standard_grayscale", "Standard Grayscale", ("psnr_y", "msssim_luma", "psnr_hvs_m_luma", "haarpsi_luma")),), 32)
 
-    assert "# VTM Scaling List Study" in readme
+    assert "# VTM 23.0 Default Scaling-List QP Study" in readme
     assert "`--ScalingList=1`" in readme
     assert "baboon`, `goldhill`, and `peppers" in readme
-    assert "### Baboon" in readme
+    assert "#### Baboon" in readme
     assert "Metric values by QP" in readme
     assert "CU partition statistics by QP" in readme
     assert "<details>" not in readme
-    assert "behavior of the partitioning scheme as QP changes" in readme
-    assert "rectangular blocks" in readme
+    assert "fewer, larger coding units" in readme
+    assert "square and rectangular CUs" in readme
     assert "Bitstream bytes (.vvc file size)" in readme
-    assert "luma means the first Y plane" in readme
-    assert "Metric provenance" in readme
-    assert "ScalingList=0/off" in readme
+    assert "Luma denotes the first Y plane" in readme
+    assert "Measurements and Provenance" in readme
+    assert "`--ScalingList=0`" in readme
     assert "CU color" not in readme
     assert "VTM 23.0 baseline and VTM 23.0 CSF" not in readme
+    assert "README table" not in readme
+
+
+def test_scaling_list_comparison_explains_neutral_weights_and_alignment(tmp_path: Path) -> None:
+    dataset = tmp_path / "standard_grayscale"
+    dataset.mkdir()
+    with (dataset / "scaling_list_mode_comparison.csv").open("w", encoding="utf-8", newline="") as stream:
+        writer = csv.DictWriter(
+            stream,
+            fieldnames=[
+                "image",
+                "qp",
+                "bpp_delta",
+                "bitstream_bytes_delta",
+                "psnr_y_delta",
+                "msssim_luma_delta",
+                "psnr_hvs_m_luma_delta",
+                "haarpsi_luma_delta",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow({field: 0 for field in writer.fieldnames} | {"image": "baboon", "qp": 22})
+
+    readme = build_readme(
+        tmp_path,
+        (("standard_grayscale", "Standard Grayscale", ("psnr_y", "msssim_luma", "psnr_hvs_m_luma", "haarpsi_luma")),),
+        32,
+    )
+
+    assert "Quantization remains active in both modes" in readme
+    assert "All coefficients are `16`" in readme
+    assert "No custom or CSF matrix is involved" in readme
+    assert "All 24 paired encodes produced bit-identical reconstructed YUV files" in readme
+    assert "deterministic syntax overhead" in readme
+    assert "README table" not in readme
 
 
 def test_per_image_summary_uses_absolute_scaling_list_metrics() -> None:
