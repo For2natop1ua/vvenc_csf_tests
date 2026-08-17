@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "dataset": "kodak",
+  "source_dir": "data/datasets/images/kodak/png",
+  "results_dir": "results/vtm_content_partition_study",
+  "encoder": "binaries/vtm/vtm23/baseline_trace/EncoderApp",
+  "decoder": "binaries/vtm/vtm23/baseline/DecoderApp",
+  "encoder_config": "configs/vtm_encoder_intra.cfg",
+  "conversion": "opencv_444",
+  "complexity_qps": [22, 27, 32, 37],
+  "interference_qps": [22, 32, 37],
+  "realization_qp": 32,
+  "awgn": {
+    "sigmas": [5, 15, 30],
+    "seeds": [20260811, 20260812, 20260813],
+    "interference_seed": 20260811,
+    "generator": "numpy.random.PCG64",
+    "image_seed": "SeedSequence([base_seed, zero_based_sorted_source_index])"
+  },
+  "stripes": {
+    "amplitudes": [8, 16, 32],
+    "period_pixels": 16,
+    "phase": 0,
+    "orientation": "horizontal"
+  },
+  "expected_source_count": 24
+}

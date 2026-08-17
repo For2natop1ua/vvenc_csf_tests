@@ -36,6 +36,7 @@ class EncodeJob:
     log: Path
     extra_args: tuple[str, ...] = ()
     codec: str | None = None
+    encoder_config: Path | None = None
 
 
 # ====================================================================================================================
@@ -136,7 +137,7 @@ class EncoderRunner:
         cmd = [
             str(job.encoder),
             "-c",
-            str(VTM_ENCODER_CONFIG),
+            str(job.encoder_config or VTM_ENCODER_CONFIG),
             "-i",
             str(job.yuv),
             "-wdt",

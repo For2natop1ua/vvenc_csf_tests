@@ -94,6 +94,29 @@ def test_encoder_runner_builds_vtm_validation_command(tmp_path: Path) -> None:
     assert not any(arg.startswith("--CSFScalingList") for arg in cmd)
 
 
+def test_encoder_runner_accepts_explicit_vtm_config(tmp_path: Path) -> None:
+    runner = RecordingRunner()
+    config = tmp_path / "study.cfg"
+    EncoderRunner(runner).encode(
+        EncodeJob(
+            encoder=Path("EncoderApp.exe"),
+            yuv=Path("input.yuv"),
+            width=64,
+            height=64,
+            qp=32,
+            preset="medium",
+            bitstream=tmp_path / "out.vvc",
+            recon=tmp_path / "out.yuv",
+            log=tmp_path / "encode.log",
+            codec="vtm",
+            encoder_config=config,
+        )
+    )
+
+    cmd, _log_file = runner.calls[0]
+    assert cmd[:3] == ["EncoderApp.exe", "-c", str(config)]
+
+
 def test_decoder_runner_builds_vvdec_command(tmp_path: Path) -> None:
     runner = RecordingRunner()
     decoder = platform_executable(Path("vvdecapp"))
